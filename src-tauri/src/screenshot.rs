@@ -12,8 +12,8 @@ use winapi::{
     um::{
         wingdi::CreateCompatibleBitmap,
         wingdi::{
-            BitBlt, CreateCompatibleDC, GetDIBits, SelectObject, BITMAPINFO, BITMAPINFOHEADER,
-            DIB_RGB_COLORS, RGBQUAD, SRCCOPY,
+            BitBlt, CreateCompatibleDC, GetDIBits, SelectObject, BITMAPFILEHEADER, BITMAPINFO,
+            BITMAPINFOHEADER, DIB_RGB_COLORS, RGBQUAD, SRCCOPY,
         },
         winuser::{GetDesktopWindow, GetWindowDC, GetWindowRect},
     },
@@ -68,6 +68,15 @@ pub fn screenshot() {
             DIB_RGB_COLORS,
         );
         println!("{}", flag);
+        let bitmap_fh = BITMAPFILEHEADER {
+            bfType: todo!(),
+            bfSize: width as u32 * height as u32 * 4
+                + size_of::<BITMAPFILEHEADER>() as u32
+                + size_of::<BITMAPINFOHEADER>() as u32,
+            bfReserved1: 0,
+            bfReserved2: 0,
+            bfOffBits: size_of::<BITMAPFILEHEADER>() as u32 + size_of::<BITMAPINFOHEADER>() as u32,
+        };
         println!(
             "width: {:?}; height: {:?} buffer: {:?}",
             width, height, bitmap_info.bmiHeader.biSizeImage
