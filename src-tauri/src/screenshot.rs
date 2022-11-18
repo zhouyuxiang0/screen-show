@@ -1,86 +1,118 @@
-use std::{
-    ffi::{c_char, c_void},
-    mem::{self, size_of},
-    ptr::null,
-};
-
-use winapi::{
-    shared::{
-        minwindef::LPVOID,
-        windef::{LPRECT, RECT},
-    },
-    um::{
-        wingdi::CreateCompatibleBitmap,
-        wingdi::{
-            BitBlt, CreateCompatibleDC, GetDIBits, SelectObject, BITMAPFILEHEADER, BITMAPINFO,
-            BITMAPINFOHEADER, DIB_RGB_COLORS, RGBQUAD, SRCCOPY,
-        },
-        winuser::{GetDesktopWindow, GetWindowDC, GetWindowRect},
-    },
-};
-
 pub fn screenshot() {
+    use std::fs::File;
+    use std::io::Write;
+    use std::mem;
+    use winapi::shared::minwindef::LPVOID;
+    use winapi::shared::windef::{HDC, HGDIOBJ, RECT};
+    use winapi::um::{
+        wingdi::{
+            CreateCompatibleBitmap, CreateCompatibleDC, CreateDIBSection, DeleteDC, GetDIBits,
+            GetObjectW, SelectObject, StretchBlt, BITMAPFILEHEADER, BITMAPINFO, BITMAPINFOHEADER,
+            DIB_RGB_COLORS, RGBQUAD, SRCCOPY,
+        },
+        winnt::HANDLE,
+        winuser::{GetDesktopWindow, GetWindowDC, GetWindowRect},
+    };
+    let mut data: Vec<u8> = vec![];
     unsafe {
         let hwnd = GetDesktopWindow();
-        let hdc1 = GetWindowDC(hwnd);
-        let hdc2 = CreateCompatibleDC(hdc1);
-        let rect = &mut RECT {
+        let dc = GetWindowDC(hwnd);
+        let cdc = CreateCompatibleDC(0 as HDC);
+        let mut rect = RECT {
             left: 0,
             top: 0,
             right: 0,
             bottom: 0,
-        } as *mut RECT;
-        GetWindowRect(hwnd, rect);
-        let width = (*rect).right - (*rect).left;
-        let height = (*rect).bottom - (*rect).top;
-        let bitmap = CreateCompatibleBitmap(hdc1, width, height);
-        SelectObject(hdc2, bitmap as *mut c_void);
-        let bitmap_info = &mut BITMAPINFO {
+        };
+        GetWindowRect(hwnd, &mut rect);
+        let (w, h) = (rect.right / 2, rect.bottom / 2);
+        let bm = CreateCompatibleBitmap(dc, w, h);
+        SelectObject(cdc, bm as HGDIOBJ);
+        StretchBlt(cdc, 0, 0, w, h, dc, 0, 0, w, h, SRCCOPY);
+        let buf = vec![0u8; (w * h * 4) as usize];
+        GetObjectW(bm as HANDLE, 84, buf.as_ptr() as LPVOID);
+        let mut bi = BITMAPINFO {
             bmiHeader: BITMAPINFOHEADER {
-                biSize: mem::size_of::<BITMAPINFOHEADER>() as u32,
-                biWidth: width,
-                biHeight: height,
+                biBitCount: 32,
+                biWidth: w,
+                biHeight: h,
                 biPlanes: 1,
-                biBitCount: 24,
                 biCompression: 0,
                 biSizeImage: 0,
+
+                biClrImportant: 0,
+                biClrUsed: 0,
+                biSize: 0,
                 biXPelsPerMeter: 0,
                 biYPelsPerMeter: 0,
-                biClrUsed: 0,
-                biClrImportant: 0,
             },
             bmiColors: [RGBQUAD {
                 rgbBlue: 0,
                 rgbGreen: 0,
                 rgbRed: 0,
                 rgbReserved: 0,
-            }],
+            }; 1],
         };
-        // let buffer = &mut String::new();
-        BitBlt(hdc2, 0, 0, width, height, hdc1, 0, 0, SRCCOPY);
-        let flag = GetDIBits(
-            hdc2,
-            bitmap,
+        bi.bmiHeader.biSize = mem::size_of_val(&bi.bmiHeader) as u32;
+        CreateDIBSection(
+            cdc,
+            &bi,
+            DIB_RGB_COLORS,
+            buf.as_ptr() as *mut *mut winapi::ctypes::c_void,
+            0 as HANDLE,
             0,
-            height.try_into().unwrap(),
-            0 as *mut c_void,
-            bitmap_info as *mut BITMAPINFO,
+        );
+
+        GetDIBits(
+            cdc,
+            bm,
+            0,
+            h as u32,
+            buf.as_ptr() as LPVOID,
+            &mut bi,
             DIB_RGB_COLORS,
         );
-        println!("{}", flag);
-        let bitmap_fh = BITMAPFILEHEADER {
-            bfType: todo!(),
-            bfSize: width as u32 * height as u32 * 4
-                + size_of::<BITMAPFILEHEADER>() as u32
-                + size_of::<BITMAPINFOHEADER>() as u32,
+
+        let bif = BITMAPFILEHEADER {
+            bfType: ('B' as u16) | (('M' as u16) << 8),
+            bfOffBits: 54,
             bfReserved1: 0,
             bfReserved2: 0,
-            bfOffBits: size_of::<BITMAPFILEHEADER>() as u32 + size_of::<BITMAPINFOHEADER>() as u32,
+            bfSize: (w * h * 4 + 54) as u32,
         };
-        println!(
-            "width: {:?}; height: {:?} buffer: {:?}",
-            width, height, bitmap_info.bmiHeader.biSizeImage
-        );
+
+        for v in serialize_row(&bif) {
+            data.push(*v);
+        }
+        let bii = BITMAPINFOHEADER {
+            biBitCount: 32,
+            biSize: 40,
+            biWidth: w,
+            biHeight: h,
+            biPlanes: 1,
+            biCompression: 0,
+            biSizeImage: (w * h * 4) as u32,
+            biClrImportant: 0,
+            biClrUsed: 0,
+            biXPelsPerMeter: 0,
+            biYPelsPerMeter: 0,
+        };
+
+        for v in serialize_row(&bii) {
+            data.push(*v);
+        }
+
+        for v in buf {
+            data.push(v);
+        }
+
+        DeleteDC(dc);
+        DeleteDC(cdc);
     }
-    println!("------------");
+    let mut file = File::create("1.bmp").expect("create failed");
+    file.write_all(&data[..]).expect("write failed");
+}
+
+pub unsafe fn serialize_row<T: Sized>(src: &T) -> &[u8] {
+    ::std::slice::from_raw_parts((src as *const T) as *const u8, ::std::mem::size_of::<T>())
 }
