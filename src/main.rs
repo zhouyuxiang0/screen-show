@@ -18,7 +18,7 @@ fn main() -> Result<()> {
 
         let window_class = w!("window");
 
-        let wc = WNDCLASSW {
+        let wc = WNDCLASSEXW {
             hCursor: LoadCursorW(None, IDC_ARROW)?,
             hInstance: instance,
             lpszClassName: window_class,
@@ -28,7 +28,8 @@ fn main() -> Result<()> {
             ..Default::default()
         };
 
-        let atom = RegisterClassW(&wc);
+        let atom = RegisterClassExW(&wc);
+        println!("{:?}", GetLastError());
         debug_assert!(atom != 0);
         let hwnd = CreateWindowExW(
             WINDOW_EX_STYLE::default(),
