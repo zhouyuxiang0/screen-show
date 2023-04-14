@@ -1,57 +1,59 @@
-use std::result::Result;
+use std::ffi::CString;
+
 use windows::{
     core::*,
     Win32::Foundation::*,
     Win32::Graphics::Gdi::ValidateRect,
-    Win32::UI::WindowsAndMessaging::*,
-    Win32::{Graphics::Gdi::HBRUSH, System::LibraryLoader::GetModuleHandleA},
+    Win32::UI::{
+        Input::KeyboardAndMouse::{MOD_ALT, MOD_NOREPEAT},
+        WindowsAndMessaging::*,
+    },
+    Win32::{System::LibraryLoader::GetModuleHandleA, UI::Input::KeyboardAndMouse::RegisterHotKey},
 };
 
-fn main() -> Result<(), Error> {
+fn main() -> Result<()> {
     unsafe {
-        let instance = GetModuleHandleA(PCSTR::null())?;
-        debug_assert!(!instance.is_invalid());
+        let instance = GetModuleHandleA(None)?;
+        debug_assert!(instance.0 != 0);
 
-        let window_class = s!("window");
-        let hcursor = HCURSOR::default();
-        let wc = WNDCLASSA {
-            hCursor: hcursor,
+        let window_class = w!("window");
+
+        let wc = WNDCLASSW {
+            hCursor: LoadCursorW(None, IDC_ARROW)?,
             hInstance: instance,
             lpszClassName: window_class,
+
             style: CS_HREDRAW | CS_VREDRAW,
             lpfnWndProc: Some(wndproc),
-            cbClsExtra: 0,
-            cbWndExtra: 0,
-            hIcon: HICON::default(),
-            hbrBackground: HBRUSH::default(),
-            lpszMenuName: PCSTR::null(),
+            ..Default::default()
         };
 
-        let atom = RegisterClassA(&wc);
+        let atom = RegisterClassW(&wc);
         debug_assert!(atom != 0);
-
-        CreateWindowExA(
+        let hwnd = CreateWindowExW(
             WINDOW_EX_STYLE::default(),
             window_class,
-            s!("截图"),
+            w!("标题"),
             WS_OVERLAPPEDWINDOW | WS_VISIBLE,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
-            HWND::default(),
-            HMENU::default(),
+            None,
+            None,
             instance,
-            Option::None,
+            None,
         );
+        // ALT + E
+        let _ = RegisterHotKey(hwnd, 1, MOD_ALT | MOD_NOREPEAT, 0x45);
+        let mut message = MSG::default();
 
-        let mut message = std::mem::zeroed();
-
-        while GetMessageA(&mut message, HWND::default(), 0, 0) != BOOL(0) {
+        while GetMessageA(&mut message, None, 0, 0).into() {
             DispatchMessageA(&message);
         }
+
+        Ok(())
     }
-    Ok(())
 }
 
 extern "system" fn wndproc(window: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
@@ -59,12 +61,16 @@ extern "system" fn wndproc(window: HWND, message: u32, wparam: WPARAM, lparam: L
         match message {
             WM_PAINT => {
                 println!("WM_PAINT");
-                ValidateRect(window, Option::None);
+                ValidateRect(window, None);
                 LRESULT(0)
             }
             WM_DESTROY => {
                 println!("WM_DESTROY");
                 PostQuitMessage(0);
+                LRESULT(0)
+            }
+            WM_HOTKEY => {
+                MessageBoxW(window, w!("test"), w!("标题"), MB_OK);
                 LRESULT(0)
             }
             _ => DefWindowProcA(window, message, wparam, lparam),
