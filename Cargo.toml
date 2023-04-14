@@ -4,7 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
+[[bin]]
+name = "screen-show"
+path = "src/main.rs"
+subsystem = "windows"
 [dependencies]
-winapi = { version = "0.3.9", features = ["winuser"] }
-windows = { version = "0.48.0", features = ["Win32", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.48.0", features = ["Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_WindowsAndMessaging",
+] }
