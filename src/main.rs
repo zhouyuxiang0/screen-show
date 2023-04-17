@@ -1,24 +1,27 @@
-use std::ffi::CString;
-
 use windows::{
     core::*,
     Win32::Foundation::*,
     Win32::Graphics::Gdi::ValidateRect,
-    Win32::UI::{
-        Input::KeyboardAndMouse::{MOD_ALT, MOD_NOREPEAT},
-        WindowsAndMessaging::*,
+    Win32::UI::Input::KeyboardAndMouse::RegisterHotKey,
+    Win32::{
+        System::LibraryLoader::GetModuleHandleW,
+        UI::{
+            Controls::{LoadIconMetric, LIM_SMALL},
+            Input::KeyboardAndMouse::{MOD_ALT, MOD_NOREPEAT},
+            Shell::{Shell_NotifyIconW, NIF_GUID, NIF_ICON, NIF_TIP, NIM_ADD, NOTIFYICONDATAW},
+            WindowsAndMessaging::*,
+        },
     },
-    Win32::{System::LibraryLoader::GetModuleHandleA, UI::Input::KeyboardAndMouse::RegisterHotKey},
 };
 
 fn main() -> Result<()> {
     unsafe {
-        let instance = GetModuleHandleA(None)?;
+        let instance = GetModuleHandleW(None)?;
         debug_assert!(instance.0 != 0);
 
         let window_class = w!("window");
 
-        let wc = WNDCLASSEXW {
+        let wc = WNDCLASSW {
             hCursor: LoadCursorW(None, IDC_ARROW)?,
             hInstance: instance,
             lpszClassName: window_class,
@@ -27,14 +30,12 @@ fn main() -> Result<()> {
             lpfnWndProc: Some(wndproc),
             ..Default::default()
         };
-
-        let atom = RegisterClassExW(&wc);
-        println!("{:?}", GetLastError());
+        let atom = RegisterClassW(&wc);
         debug_assert!(atom != 0);
         let hwnd = CreateWindowExW(
             WINDOW_EX_STYLE::default(),
             window_class,
-            w!("标题"),
+            w!("test 标题"),
             WS_OVERLAPPEDWINDOW | WS_VISIBLE,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
@@ -45,6 +46,27 @@ fn main() -> Result<()> {
             instance,
             None,
         );
+        let guid = GUID {
+            data1: 0x23977b55,
+            data2: 0x10e0,
+            data3: 0x4041,
+            data4: [0xb8, 0x62, 0xb1, 0x95, 0x41, 0x96, 0x36, 0x69],
+        };
+        let lpdata = NOTIFYICONDATAW {
+            hWnd: hwnd,
+            uFlags: NIF_ICON | NIF_TIP | NIF_GUID,
+            guidItem: guid,
+            ..Default::default()
+        };
+        match LoadIconMetric(HMODULE::default(), IDI_APPLICATION, LIM_SMALL) {
+            Err(e) => {
+                println!("{:?}", e);
+            }
+            _ => {}
+        }
+        if Shell_NotifyIconW(NIM_ADD, &lpdata) == BOOL(0) {
+            println!("{:?}", GetLastError());
+        }
         // ALT + E
         let _ = RegisterHotKey(hwnd, 1, MOD_ALT | MOD_NOREPEAT, 0x45);
         let mut message = MSG::default();
@@ -74,6 +96,7 @@ extern "system" fn wndproc(window: HWND, message: u32, wparam: WPARAM, lparam: L
                 MessageBoxW(window, w!("test"), w!("标题"), MB_OK);
                 LRESULT(0)
             }
+            WM_CREATE => LRESULT(0),
             _ => DefWindowProcA(window, message, wparam, lparam),
         }
     }
