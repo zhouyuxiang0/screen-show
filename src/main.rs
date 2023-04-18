@@ -52,19 +52,14 @@ fn main() -> Result<()> {
             data3: 0x4041,
             data4: [0xb8, 0x62, 0xb1, 0x95, 0x41, 0x96, 0x36, 0x69],
         };
-        let lpdata = NOTIFYICONDATAW {
+        let nid = NOTIFYICONDATAW {
             hWnd: hwnd,
             uFlags: NIF_ICON | NIF_TIP | NIF_GUID,
             guidItem: guid,
             ..Default::default()
         };
-        match LoadIconMetric(HMODULE::default(), IDI_APPLICATION, LIM_SMALL) {
-            Err(e) => {
-                println!("{:?}", e);
-            }
-            _ => {}
-        }
-        if Shell_NotifyIconW(NIM_ADD, &lpdata) == BOOL(0) {
+        LoadIconMetric(HMODULE::default(), IDI_ASTERISK, LIM_SMALL)?;
+        if Shell_NotifyIconW(NIM_ADD, &nid) == BOOL(0) {
             println!("{:?}", GetLastError());
         }
         // ALT + E
